@@ -110,7 +110,8 @@ export default function ShaderComponent(props: ShaderComponentProps) {
         shaderNodeRegister: parentRegister,
         shaderUniformUpdate: parentUniformUpdate,
         shaderMetadataUpdate: parentMetadataUpdate,
-        shaderColorSpace
+        shaderColorSpace,
+        shaderRendererResetSignal
     } = context;
 
     // Create instance ID from name or generate a deterministic one (SSR-safe)
@@ -194,8 +195,8 @@ export default function ShaderComponent(props: ShaderComponentProps) {
     // Track registration state
     let isRegistered = false;
 
-    // Register with parent when mounted (ONCE - no re-registration on metadata changes)
-    onMount(() => {
+    // Register this node with the parent renderer
+    const registerWithRenderer = () => {
         const uniforms = getUniformsMap();
         if (!uniforms) return;
 
@@ -229,22 +230,37 @@ export default function ShaderComponent(props: ShaderComponentProps) {
             );
 
             isRegistered = true;
-
-            // Detect DOM position for correct render ordering
-            if (props.renderOrder === undefined && markerRef) {
-                const parent = markerRef.parentElement;
-                if (parent) {
-                    const siblings = parent.querySelectorAll(':scope > [data-shader-id]');
-                    const position = Array.from(siblings).indexOf(markerRef);
-                    if (position >= 0) {
-                        detectedRenderOrder = position;
-                        parentMetadataUpdate(instanceId, { renderOrder: position } as NodeMetadata);
-                    }
-                }
-            }
         } catch (error) {
             console.error('Error registering shader node:', error);
         }
+    };
+
+    // Register with parent when mounted (ONCE - no re-registration on metadata changes)
+    onMount(() => {
+        registerWithRenderer();
+
+        // Detect DOM position for correct render ordering
+        if (props.renderOrder === undefined && markerRef) {
+            const parent = markerRef.parentElement;
+            if (parent) {
+                const siblings = parent.querySelectorAll(':scope > [data-shader-id]');
+                const position = Array.from(siblings).indexOf(markerRef);
+                if (position >= 0) {
+                    detectedRenderOrder = position;
+                    parentMetadataUpdate(instanceId, { renderOrder: position } as NodeMetadata);
+                }
+            }
+        }
+    });
+
+    // Re-register after renderer resets (e.g. colorSpace/toneMapping change tore the
+    // renderer down and re-initialized it): cleanup() clears the node registry and
+    // initializeRenderer() only re-registers the root node. The signal starts at 0 so
+    // the initial registration above is not duplicated by this effect.
+    createEffect(() => {
+        const signal = shaderRendererResetSignal?.();
+        if (signal === undefined || signal === 0 || !isRegistered) return;
+        registerWithRenderer();
     });
 
     // Cleanup on unmount - unregister node

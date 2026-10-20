@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { getContext, setContext, onMount, onDestroy } from 'svelte';
+    import { getContext, setContext, onMount, onDestroy, untrack } from 'svelte';
     import {
         createGpuUniformsMap,
         resolveBoundingBox,
@@ -272,8 +272,17 @@ __MAPPABLE_PROP_DECLS__        blendMode?: BlendMode;
         parentMetadataUpdate(instanceId, metadata);
     });
 
-    // Register this component after mount to ensure parent is ready
-    onMount(() => {
+    /**
+     * Get the renderer reset signal from the root Shader component.
+     * When it bumps, the renderer has been re-initialized (cleanup() cleared the node
+     * registry) and this component must register again.
+     */
+    const rendererResetSignal = getContext<() => number>('shaderRendererResetSignal');
+
+    /**
+     * Register this component with the renderer
+     */
+    function registerWithRenderer() {
         // Register this component with safety check
         if (componentDefinition && typeof componentDefinition.fragment === 'function') {
             parentRegister(
@@ -303,19 +312,6 @@ __MAPPABLE_PROP_DECLS__        blendMode?: BlendMode;
 
             // Set flag to enable effects after successful registration
             isRegistered = true;
-
-            // Detect DOM position for correct render ordering
-            if (renderOrder === undefined && orderMarker) {
-                const parent = orderMarker.parentElement;
-                if (parent) {
-                    const siblings = parent.querySelectorAll(':scope > [data-shader-id]');
-                    const position = Array.from(siblings).indexOf(orderMarker);
-                    if (position >= 0) {
-                        detectedRenderOrder = position;
-                        parentMetadataUpdate(instanceId, { renderOrder: position } as NodeMetadata);
-                    }
-                }
-            }
         } else {
             console.error('componentDefinition.fragment is not a function:', {
                 componentDefinition,
@@ -323,6 +319,33 @@ __MAPPABLE_PROP_DECLS__        blendMode?: BlendMode;
                 type: typeof componentDefinition?.fragment
             });
         }
+    }
+
+    // Register this component after mount to ensure parent is ready
+    onMount(() => {
+        registerWithRenderer();
+
+        // Detect DOM position for correct render ordering
+        if (renderOrder === undefined && orderMarker) {
+            const parent = orderMarker.parentElement;
+            if (parent) {
+                const siblings = parent.querySelectorAll(':scope > [data-shader-id]');
+                const position = Array.from(siblings).indexOf(orderMarker);
+                if (position >= 0) {
+                    detectedRenderOrder = position;
+                    parentMetadataUpdate(instanceId, { renderOrder: position } as NodeMetadata);
+                }
+            }
+        }
+    });
+
+    // Re-register after renderer resets (e.g. colorSpace/toneMapping change tore the
+    // renderer down and re-initialized it). The signal starts at 0 so the initial
+    // registration above is not duplicated by this effect.
+    $effect(() => {
+        const signal = rendererResetSignal?.();
+        if (signal === undefined || signal === 0 || !isRegistered) return;
+        untrack(() => registerWithRenderer());
     });
 
     // Clean up node from registry when component is unmounted
