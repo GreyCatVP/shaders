@@ -1,5 +1,17 @@
 # Changelog
 
+## v4.0.5
+
+[compare changes](https://github.com/shader-effects-inc/shaders/compare/v4.0.4...v4.0.5)
+
+### Features
+
+- Expanded dimensional units support ([#27](https://github.com/shader-effects-inc/shaders/pull/27))
+
+### Contributors
+
+- Simon Le Marchant
+
 ## v4.0.4
 
 [compare changes](https://github.com/shader-effects-inc/shaders/compare/v4.0.3...v4.0.4)
