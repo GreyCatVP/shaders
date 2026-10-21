@@ -255,7 +255,7 @@ function resolveSize(
     if (v.unit === 'uv') return v.value
     const px = lengthToPx(v, axis, { canvasWidth: width, canvasHeight: height })
     if (px == null) {
-        warnUnitOnce(`"${v.value}${v.unit}" isn't supported on "${propName}" — % only works on props tied to an axis (x, y, width, height). Using the default instead.`)
+        warnUnitOnce(`"${v.unit}" isn't supported on "${propName}" — % only works on props tied to an axis (x, y, width, height). Using the default instead.`)
         return undefined
     }
     if (conversion === 'canvas-width') return width > 0 ? px / width : v.value

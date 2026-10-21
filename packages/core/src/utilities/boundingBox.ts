@@ -101,7 +101,7 @@ export function boxCornerRadiusUV(d: unknown, canvasWidth: number, canvasHeight:
     if (v.unit === 'uv') return v.value
     const px = lengthToPx(v, 'none', { canvasWidth, canvasHeight })
     if (px == null) {
-        warnUnitOnce(`"${v.value}${v.unit}" isn't supported on boundingBox.cornerRadius — % corners are elliptical in CSS and not supported yet. Using square corners.`)
+        warnUnitOnce(`"${v.unit}" isn't supported on boundingBox.cornerRadius — % corners are elliptical in CSS and not supported yet. Using square corners.`)
         return 0
     }
     return canvasHeight > 0 ? px / canvasHeight : 0

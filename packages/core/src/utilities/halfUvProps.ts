@@ -44,7 +44,9 @@ export function halfUvFromProp(
 ): number {
     const safeFallback = Number.isFinite(fallback) ? fallback : 0.5
     const d = toDimensional(value)
-    if (d && d.unit !== 'uv') {
+    // `uv` (object or `'0.3uv'` string) already IS the half-UV value.
+    if (d && d.unit === 'uv') return Number.isFinite(d.value) ? d.value : safeFallback
+    if (d) {
         if (!Number.isFinite(d.value)) return safeFallback
         if (!(Number.isFinite(canvasHeight) && canvasHeight !== 0)) return safeFallback
         // Any real unit carries the FULL size; convert to px, then to the half-UV.

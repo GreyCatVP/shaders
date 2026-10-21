@@ -195,6 +195,7 @@ describe('shape sizes (RoundedRect — half-extents in canvas-height units)', ()
     it('% on an axis-less prop is dropped (undefined → caller default) with one warning', () => {
         expect(resolve(rr, 'rounding', '10%')).toBeUndefined()
         expect(resolve(rr, 'rounding', '10%')).toBeUndefined()
+        expect(resolve(rr, 'rounding', '11%')).toBeUndefined() // a different value is still one warning
         expect(warn).toHaveBeenCalledTimes(1)
         expect(String(warn.mock.calls[0][0])).toContain('rounding')
     })
@@ -256,6 +257,8 @@ describe('marker-declared props and the other unit readers', () => {
         expect(halfUvFromProp('10vw', H, 0.35)).toBeCloseTo(144 / 800, 9)
         expect(halfUvFromProp('50%', H, 0.35, 'x', W)).toBeCloseTo(0.5, 9)
         expect(halfUvFromProp('50%', H, 0.35)).toBe(0.35) // no axis → fallback
+        expect(halfUvFromProp('0.3uv', H, 0.35)).toBe(0.3)
+        expect(halfUvFromProp({value: NaN, unit: 'uv'}, H, 0.35)).toBe(0.35)
     })
 
     it('Text: fontSize takes rem (no %), width % is of the box width', () => {
