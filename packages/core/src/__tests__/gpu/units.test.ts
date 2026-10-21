@@ -85,6 +85,16 @@ describe('parsing', () => {
         expect(parseLength('12 px px')).toBeNull()
     })
 
+    it('rejects adversarial digit runs fast (no polynomial backtracking) and caps input length', () => {
+        const start = performance.now()
+        expect(parseLength('9'.repeat(60) + 'x')).toBeNull()
+        expect(parseLength('9'.repeat(100_000) + 'x')).toBeNull()
+        expect(parseLength('9'.repeat(100_000) + 'px')).toBeNull() // over the cap, even if well-formed
+        expect(performance.now() - start).toBeLessThan(50)
+        expect(parseLength('12.px')).toEqual({value: 12, unit: 'px'})
+        expect(parseLength('1e3px')).toEqual({value: 1000, unit: 'px'})
+    })
+
     it('normalizes objects and strings, leaves plain numbers to the legacy path', () => {
         expect(toDimensional({value: 5, unit: 'vh'})).toEqual({value: 5, unit: 'vh'})
         expect(toDimensional({value: 5, unit: 'em'})).toBeNull()

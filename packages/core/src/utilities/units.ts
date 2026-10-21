@@ -30,7 +30,13 @@ const VIEWPORT_UNITS = new Set<string>(['vw', 'vh', 'vmin', 'vmax', 'rem'])
 
 // A finite CSS number (`12`, `-0.5`, `.5`, `1e3`) followed by a unit. The unit is required — a
 // unitless string isn't a length, except a bare `'0'`, which CSS accepts in any unit.
-const LENGTH_RE = /^\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*(px|%|cw|ch|cmin|cmax|vw|vh|vmin|vmax|rem|uv)\s*$/i
+// The number grammar is deliberately unambiguous (`\d+(?:\.\d*)?`, never `\d+\.?\d*`): with an
+// optional dot, a long run of digits can split between two `\d` groups in n ways, so a failing
+// match backtracks quadratically (CodeQL js/polynomial-redos).
+const LENGTH_RE = /^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*(px|%|cw|ch|cmin|cmax|vw|vh|vmin|vmax|rem|uv)\s*$/i
+
+// No real length comes close; caps the work on arbitrary input (e.g. preset JSON) regardless.
+const MAX_LENGTH_STRING = 64
 
 /** Whether `v` is a dimensional value in its stored object form. */
 export function isDimensionalValue(v: any): v is DimensionalValue {
@@ -40,6 +46,7 @@ export function isDimensionalValue(v: any): v is DimensionalValue {
 
 /** Parses a CSS-like length string (`'50vw'`) into its object form; null when it isn't one. */
 export function parseLength(s: string): DimensionalValue | null {
+    if (s.length > MAX_LENGTH_STRING) return null
     if (s.trim() === '0') return { value: 0, unit: 'px' }
     const m = LENGTH_RE.exec(s)
     if (!m) return null

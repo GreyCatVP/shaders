@@ -276,8 +276,15 @@ function reduceBoundingBoxForExport(bb: any): Record<string, any> | null {
   const lengthOf = (d: any): { value: number; unit: string } | null => {
     if (typeof d === 'number') return { value: d, unit: 'px' }
     if (typeof d === 'string') {
-      const m = /^\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*([a-z%]*)\s*$/i.exec(d)
-      return m ? { value: Number(m[1]), unit: (m[2] || 'px').toLowerCase() } : null
+      // Split '12.5px' → 12.5 / 'px' without a regex (this snippet lives in a template literal,
+      // where regex backslashes are easy to lose, and needs no backtracking either).
+      const t = d.trim()
+      if (t.length === 0 || t.length > 64) return null
+      let i = 0
+      while (i < t.length && '+-.0123456789'.includes(t[i])) i++
+      const value = Number(t.slice(0, i))
+      if (i === 0 || !Number.isFinite(value)) return null
+      return { value, unit: t.slice(i).trim().toLowerCase() || 'px' }
     }
     if (d && typeof d === 'object') return { value: Number(d.value), unit: d.unit ?? 'uv' }
     return null
