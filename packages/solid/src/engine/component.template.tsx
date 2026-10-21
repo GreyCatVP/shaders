@@ -1,4 +1,4 @@
-import { createMemo, createEffect, onMount, onCleanup, splitProps, createUniqueId, createSignal, type JSX } from 'solid-js';
+import { createMemo, createEffect, on, onMount, onCleanup, splitProps, createUniqueId, createSignal, type JSX } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import {
     createGpuUniformsMap,
@@ -257,11 +257,13 @@ export default function ShaderComponent(props: ShaderComponentProps) {
     // renderer down and re-initialized it): cleanup() clears the node registry and
     // initializeRenderer() only re-registers the root node. The signal starts at 0 so
     // the initial registration above is not duplicated by this effect.
-    createEffect(() => {
-        const signal = shaderRendererResetSignal?.();
+    createEffect(on(() => shaderRendererResetSignal?.(), (signal) => {
+        // `on` watches ONLY the reset signal: registerWithRenderer reads props/
+        // memos, and those must not re-trigger a full re-registration (metadata
+        // and uniform updates have their own dedicated effects).
         if (signal === undefined || signal === 0 || !isRegistered) return;
         registerWithRenderer();
-    });
+    }));
 
     // Cleanup on unmount - unregister node
     onCleanup(() => {

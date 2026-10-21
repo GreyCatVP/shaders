@@ -179,11 +179,13 @@ export default function CustomShader<T extends Record<string, any> = Record<stri
     // renderer down and re-initialized it): cleanup() clears the node registry and
     // initializeRenderer() only re-registers the root node. The signal starts at 0 so
     // the initial registration above is not duplicated by this effect.
-    createEffect(() => {
-        const signal = shaderRendererResetSignal?.();
+    createEffect(on(() => shaderRendererResetSignal?.(), (signal) => {
+        // `on` watches ONLY the reset signal: register() reads every shader/metadata
+        // prop, and those must not re-trigger a full re-registration (uniform and
+        // metadata updates have their own dedicated effects).
         if (signal === undefined || signal === 0 || !isRegistered || !local.src) return;
         register(local.src as GpuShaderDefinition<any>);
-    });
+    }));
 
     onCleanup(() => {
         isRegistered = false;
