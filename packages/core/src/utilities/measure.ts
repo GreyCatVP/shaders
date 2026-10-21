@@ -1,5 +1,5 @@
 import type { BoundingBoxConfig, BoundingBoxDeclaration } from '../types'
-import { bindingSizePx } from './dimensionalProps'
+import { bindingSizePx, sizeBindingAxis } from './dimensionalProps'
 import { getNaturalSize } from './naturalSize'
 // Media tier only: the natural-size KEY is declared on the shader definition, and `type` (a
 // component name) is all a measurer is given, so the lookup goes through the registry.
@@ -102,8 +102,8 @@ export function measureNode(input: MeasureInput, cw: number, ch: number): Measur
     // 2. Size prop bindings.
     const pb = decl?.propBindings
     if (pb?.width && pb?.height) {
-        const w = bindingSizePx(pb.width, props[pb.width.prop], cw, ch)
-        const h = bindingSizePx(pb.height, props[pb.height.prop], cw, ch)
+        const w = bindingSizePx(pb.width, props[pb.width.prop], cw, ch, sizeBindingAxis(pb, pb.width.prop))
+        const h = bindingSizePx(pb.height, props[pb.height.prop], cw, ch, sizeBindingAxis(pb, pb.height.prop))
         if (w > 0 && h > 0) return { widthPx: w, heightPx: h }
         return null
     }
