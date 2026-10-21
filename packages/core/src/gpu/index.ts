@@ -67,7 +67,7 @@ import {
 } from '../utilities/dimensionalProps'
 import {invalidateUnitEnvironment, usesViewportUnits} from '../utilities/units'
 import {maxPixelRatioForDevice} from '../utilities/device'
-import {isIdentityBoundingBox} from '../utilities/boundingBox'
+import {boundingBoxUsesViewportUnits, isIdentityBoundingBox} from '../utilities/boundingBox'
 import {getSdfContentBounds, isSdfContentBoundsScanned} from '../utilities/sdfBounds'
 import {computeTreeLayout, type LayoutNodeView} from '../utilities/layout'
 import {onNaturalSizeChange} from '../utilities/naturalSize'
@@ -618,6 +618,12 @@ export function shaderRendererGPU() {
         invalidateUnitEnvironment()
         let any = false
         for (const node of nodes.values()) {
+            // A boundingBox sized in viewport units: rewrite its synthetic box fields.
+            if (bboxActive(node) && boundingBoxUsesViewportUnits(node.metadata.boundingBox)) {
+                const bb = bboxFieldValues(node)
+                if (bb) for (const [k, v] of Object.entries(bb)) writeSyntheticScalar(node, `_bbox_${k}`, v)
+                any = true
+            }
             const plan = buildDimensionalPlan(node.boundingBoxDeclaration, node.extraDimProps)
             if (!plan) continue
             const uses = [...plan.positionProps, ...plan.sizeProps.keys()]

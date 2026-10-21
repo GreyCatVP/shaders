@@ -19,6 +19,10 @@ import {
 import {halfUvFromProp} from '@coreroot/utilities/halfUvProps'
 import {resolveLayoutConfig} from '@coreroot/utilities/layout'
 import {measureNode} from '@coreroot/utilities/measure'
+import {boundingBoxUsesViewportUnits, isIdentityBoundingBox, resolveBoundingBox} from '@coreroot/utilities/boundingBox'
+import {boundingBoxToUVParams} from '@coreroot/gpu/kit/uvTransform'
+import LinearGradient from '@coreroot/shaders/LinearGradient/index'
+import type {BoundingBoxConfig, BoundingBoxInput} from '@coreroot/types'
 import RoundedRect from '@coreroot/shaders/RoundedRect/index'
 import Circle from '@coreroot/shaders/Circle/index'
 import Star from '@coreroot/shaders/Star/index'
@@ -340,5 +344,123 @@ describe('renderer', () => {
         // width 50% → 500px → 500 / 1000; height 10cmin → 50px → 50 / 1000
         expect(node.uniforms.width.value).toBeCloseTo(0.5, 9)
         expect(node.uniforms.height.value).toBeCloseTo(0.05, 9)
+    })
+})
+
+// ── boundingBox (filters / generators / media) ─────────────────────────────────────────────
+
+const box = (b: BoundingBoxInput) => resolveBoundingBox(b)!
+const uv = (b: BoundingBoxInput) => boundingBoxToUVParams(box(b), W, H)
+
+describe('boundingBox — authored forms', () => {
+    it('bare numbers are px, strings are parsed, omitted keys are full-frame', () => {
+        const b = box({x: 24, y: '10%', width: '50vw'})
+        expect(b.x).toEqual({value: 24, unit: 'px'})
+        expect(b.y).toEqual({value: 10, unit: '%'})
+        expect(b.width).toEqual({value: 50, unit: 'vw'})
+        expect(b.height).toEqual({value: 1, unit: 'uv'})
+        expect(b.origin).toBe('top-left')
+    })
+
+    it('stored objects (and legacy partials) are unchanged', () => {
+        const b = box({x: {value: 0.25, unit: 'uv'}, y: {value: 40, unit: 'px'}, width: {value: 0.5} as never})
+        expect(b.x).toEqual({value: 0.25, unit: 'uv'})
+        expect(b.y).toEqual({value: 40, unit: 'px'})
+        expect(b.width).toEqual({value: 0.5, unit: 'uv'}) // unit-less partial has always read as uv
+    })
+
+    it('an unreadable string falls back to the default with a warning', () => {
+        const b = box({width: '50em' as never})
+        expect(b.width).toEqual({value: 1, unit: 'uv'})
+        expect(warn).toHaveBeenCalled()
+    })
+
+    it('cornerRadius: bare number px, unit-less partial uv', () => {
+        expect(box({cornerRadius: 12}).cornerRadius).toEqual({value: 12, unit: 'px'})
+        expect(box({cornerRadius: {value: 0.05} as never}).cornerRadius).toEqual({value: 0.05, unit: 'uv'})
+    })
+})
+
+describe('boundingBox — geometry', () => {
+    it('legacy uv and px boxes resolve exactly as before', () => {
+        const legacy = boundingBoxToUVParams({
+            x: {value: 0.1, unit: 'uv'}, y: {value: 40, unit: 'px'},
+            width: {value: 0.5, unit: 'uv'}, height: {value: 100, unit: 'px'},
+            origin: 'top-left', rotation: 0, cornerRadius: {value: 20, unit: 'px'},
+        }, W, H)
+        expect(legacy.centerX).toBeCloseTo(0.1 + 0.25, 9)
+        expect(legacy.centerY).toBeCloseTo(0.1 + 0.125, 9)
+        expect(legacy.halfWidthUV).toBeCloseTo(0.25, 9)
+        expect(legacy.halfHeightUV).toBeCloseTo(0.125, 9)
+        expect(legacy.cornerRadiusUV).toBeCloseTo(20 / 400, 9)
+    })
+
+    it('% measures the containing box on each axis (like left/top/width/height on a div)', () => {
+        const p = uv({x: '10%', y: '20%', width: '50%', height: '25%'})
+        expect(p.centerX).toBeCloseTo(0.1 + 0.25, 9)
+        expect(p.centerY).toBeCloseTo(0.2 + 0.125, 9)
+        expect(p.halfWidthUV).toBeCloseTo(0.25, 9)
+        expect(p.halfHeightUV).toBeCloseTo(0.125, 9)
+    })
+
+    it('edge origins place the matching box edge (right: 24px; bottom: 1rem)', () => {
+        const p = uv({x: 24, y: '1rem', width: '10vw', height: '10ch', origin: 'bottom-right'})
+        // right edge 24px from the right, 144px wide → left at 800 − 24 − 144 = 632
+        expect(p.centerX - p.halfWidthUV).toBeCloseTo(632 / W, 9)
+        expect(p.halfWidthUV).toBeCloseTo(72 / W, 9)
+        // bottom edge 16px from the bottom, 40px tall → top at 400 − 16 − 40 = 344
+        expect(p.centerY - p.halfHeightUV).toBeCloseTo(344 / H, 9)
+    })
+
+    it('centre origin: offsets from the middle, "0" centres the box', () => {
+        const p = uv({x: '0', y: 0, width: '200px', height: '50%', origin: 'center'})
+        expect(p.centerX).toBeCloseTo(0.5, 9)
+        expect(p.centerY).toBeCloseTo(0.5, 9)
+    })
+
+    it('cornerRadius takes lengths; % is rejected (round-corner clip) with a warning', () => {
+        expect(uv({width: '50%', cornerRadius: '1rem'}).cornerRadiusUV).toBeCloseTo(16 / 400, 9)
+        expect(uv({width: '50%', cornerRadius: '2vmin'}).cornerRadiusUV).toBeCloseTo(18 / 400, 9)
+        expect(uv({width: '50%', cornerRadius: '10%'}).cornerRadiusUV).toBe(0)
+        expect(warn).toHaveBeenCalled()
+    })
+})
+
+describe('boundingBox — identity, viewport detection, layout', () => {
+    it('canvas-relative full-frame boxes are identity in uv, % and cw/ch; px never is', () => {
+        expect(isIdentityBoundingBox(box({}))).toBe(true)
+        expect(isIdentityBoundingBox(box({x: '0%', y: '0ch', width: '100%', height: '100ch'}))).toBe(true)
+        expect(isIdentityBoundingBox(box({width: '100cw', height: '100%'}))).toBe(true)
+        expect(isIdentityBoundingBox(box({width: '100ch'}))).toBe(false) // wrong axis
+        expect(isIdentityBoundingBox(box({width: W, height: H}))).toBe(false)
+        expect(isIdentityBoundingBox(box({width: '100vw'}))).toBe(false)
+    })
+
+    it('flags boxes that need re-resolving on a window resize', () => {
+        expect(boundingBoxUsesViewportUnits(box({width: '50vw'}))).toBe(true)
+        expect(boundingBoxUsesViewportUnits(box({cornerRadius: '1rem'}))).toBe(true)
+        expect(boundingBoxUsesViewportUnits(box({width: '50%', x: 24}))).toBe(false)
+    })
+
+    it('layout measures a boxed layer in any unit', () => {
+        const m = measureNode({type: 'LinearGradient', decl: undefined, props: {}, boundingBox: box({width: '50%', height: '10vh'})} as never, W, H)
+        expect(m).toEqual({widthPx: 400, heightPx: 90})
+    })
+
+    it('the renderer packs a viewport-sized box from the live viewport', () => {
+        const lg = LinearGradient as GpuShaderDefinition
+        const reactive: Record<string, unknown> = {}
+        for (const [name, cfg] of Object.entries(lg.props)) reactive[name] = (cfg as {default: unknown}).default
+        const r = shaderRendererGPU()
+        r.__testing.setTestReady({width: W, height: H})
+        r.registerNode('root', Root.fragment, null, meta(), {} as never, Root)
+        const m = {...meta(), boundingBox: box({width: '50vw', height: '50%'}) as BoundingBoxConfig}
+        r.registerNode('lg', lg.fragment, 'root', m, createGpuUniformsMap(lg as never, reactive, 'lg') as never, lg)
+        const field = (name: string) => r.__testing.buildFieldInits('lg')!.find((f) => f.name === name)?.initial as number
+        expect(field('_bbox_halfWidth')).toBeCloseTo(360 / W, 9) // 50vw of 1440 = 720px → half 360
+        expect(field('_bbox_halfHeight')).toBeCloseTo(0.25, 9)
+        setUnitEnvironmentOverride({viewportWidth: 1000, viewportHeight: 700, rem: 16})
+        r.__testing.reresolveViewportUnits()
+        expect(field('_bbox_halfWidth')).toBeCloseTo(250 / W, 9)
     })
 })

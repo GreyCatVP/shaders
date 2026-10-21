@@ -353,12 +353,20 @@ export interface MaskConfig {
 }
 
 /**
- * A single dimensional value with its own unit, used in BoundingBoxConfig.
+ * A single dimensional value with its own unit, used in BoundingBoxConfig. `uv` is a fraction
+ * of the canvas on that axis (the legacy unit); every other unit is a CSS length (see
+ * utilities/units.ts) — `%` measures the containing box (the canvas until frames exist).
  */
 export interface BoundingBoxDimension {
     value: number
-    unit: 'px' | 'uv'
+    unit: DimensionalUnit
 }
+
+/**
+ * A bounding-box length as authored: a `BoundingBoxDimension`, a CSS-like string (`'50%'`,
+ * `'2rem'`), or a bare number — which, as in CSS and React's `style` prop, means PIXELS.
+ */
+export type BoundingBoxLength = number | DimensionalString | Partial<BoundingBoxDimension>
 
 /**
  * Reference edge a bounding box / shape position is measured from. The horizontal and
@@ -438,6 +446,21 @@ export interface BoundingBoxConfig {
      * this — it carries no rendering meaning, only the editor's resize constraint.
      */
     lockAspect?: boolean
+}
+
+/**
+ * A bounding box as authored on the `boundingBox` prop: every key optional (omitted keys fall back
+ * to the full-frame defaults) and every length in any accepted form. `resolveBoundingBox`
+ * normalizes it to a complete BoundingBoxConfig.
+ *
+ * @example { x: '10%', y: 24, width: '50vw', height: '300px', origin: 'bottom-right', cornerRadius: '1rem' }
+ */
+export interface BoundingBoxInput extends Omit<Partial<BoundingBoxConfig>, 'x' | 'y' | 'width' | 'height' | 'cornerRadius'> {
+    x?: BoundingBoxLength
+    y?: BoundingBoxLength
+    width?: BoundingBoxLength
+    height?: BoundingBoxLength
+    cornerRadius?: BoundingBoxLength
 }
 
 /**
