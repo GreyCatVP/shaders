@@ -5,9 +5,10 @@ import {orientedBoxField} from "@coreroot/std/effects/stylize"
 import {sampling} from "@coreroot/gpu/kit"
 import {createSwappableMediaTexture, type SwappableMediaTexture} from "@coreroot/gpu/kit/host/mediaLifecycle"
 import {createCanvasRasterTarget, createFontDependentRaster, createRasterInvalidator} from "@coreroot/gpu/kit/host/canvasRaster"
-import type {BoundingBoxOrigin, DimensionalValue} from "@coreroot/types"
+import type {BoundingBoxOrigin, DimensionalString, DimensionalValue} from "@coreroot/types"
 import {transformColor, transformPosition} from "@coreroot/utilities/transformations"
 import {loadGoogleFont} from "@coreroot/utilities/fonts"
+import {sizeValuePx} from "@coreroot/utilities/dimensionalProps"
 import {bumpMeasureGeneration, measureTextBlock, supportsCanvasLetterSpacing, type TextTransformMode} from "@coreroot/utilities/textMeasure"
 
 export interface ComponentProps {
@@ -15,11 +16,11 @@ export interface ComponentProps {
     fontFamily: string
     fontWeight: number
     italic: boolean
-    fontSize: number | DimensionalValue
+    fontSize: number | DimensionalValue | DimensionalString
     letterSpacing: number
     lineHeight: number
     textAlign: string
-    width: number | DimensionalValue
+    width: number | DimensionalValue | DimensionalString
     textTransform: string
     color: Parameters<typeof transformColor>[0]
     origin: BoundingBoxOrigin
@@ -32,17 +33,13 @@ const MAX_TEXTURE_AXIS = 4096
 const TEXT_SUPERSAMPLE = 3
 
 /** Resolve the optional wrap width prop (0/absent = auto/hug) to pixels. */
-const wrapWidthPxOf = (v: any, canvasWidth: number): number => {
-    if (v && typeof v === 'object' && typeof v.value === 'number') {
-        return v.unit === 'px' ? v.value : v.value * canvasWidth
-    }
-    return (typeof v === 'number' ? v : 0) * canvasWidth
-}
+const wrapWidthPxOf = (v: any, canvasWidth: number, canvasHeight: number): number =>
+    sizeValuePx(v, canvasWidth, 'x', canvasWidth, canvasHeight) ?? 0
 
 /** The shared measure call: block measurement with wrapping expressed at the 100px reference. */
 const measureBlockOf = (props: Record<string, any>, cw: number, ch: number) => {
-    const fontSizePx = fontSizePxOf(props.fontSize, ch)
-    const widthPx = wrapWidthPxOf(props.width, cw)
+    const fontSizePx = fontSizePxOf(props.fontSize, cw, ch)
+    const widthPx = wrapWidthPxOf(props.width, cw, ch)
     return {
         fontSizePx,
         widthPx,
@@ -57,13 +54,9 @@ const measureBlockOf = (props: Record<string, any>, cw: number, ch: number) => {
     }
 }
 
-/** Resolve a raw fontSize prop (UV number or px DimensionalValue) to pixels. */
-const fontSizePxOf = (v: any, canvasHeight: number): number => {
-    if (v && typeof v === 'object' && typeof v.value === 'number') {
-        return v.unit === 'px' ? v.value : v.value * canvasHeight
-    }
-    return (typeof v === 'number' ? v : 0.1) * canvasHeight
-}
+/** Resolve a raw fontSize prop (UV number or a unit-carrying value) to pixels. 0.1 UV by default. */
+const fontSizePxOf = (v: any, canvasWidth: number, canvasHeight: number): number =>
+    sizeValuePx(v, canvasHeight, 'none', canvasWidth, canvasHeight) ?? 0.1 * canvasHeight
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // Host recipe: the glyph atlas — raster target + swappable glyph texture + font lifecycle +
