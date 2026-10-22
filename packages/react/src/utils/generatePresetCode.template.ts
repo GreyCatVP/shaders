@@ -123,12 +123,12 @@ function generatePropString(props: Record<string, any>, componentType: string, i
         // Format transform across multiple lines if it has multiple keys
         const keys = Object.keys(nonDefaultKeys).sort()
         if (keys.length > 1) {
-          const entries = keys.map(k => `${k}: ${typeof nonDefaultKeys[k] === 'string' ? `"${nonDefaultKeys[k]}"` : nonDefaultKeys[k]}`)
+          const entries = keys.map(k => `${k}: ${toJSLiteral(nonDefaultKeys[k])}`)
           return `${key}={{\n${indent}    ${entries.join(`,\n${indent}    `)}\n${indent}  }}`
         } else if (keys.length === 1) {
           const k = keys[0]
           const v = nonDefaultKeys[k]
-          return `${key}={{ ${k}: ${typeof v === 'string' ? `"${v}"` : v} }}`
+          return `${key}={{ ${k}: ${toJSLiteral(v)} }}`
         }
       }
 
@@ -136,27 +136,14 @@ function generatePropString(props: Record<string, any>, componentType: string, i
       if (isPropMapValue(value)) {
         const entries = Object.keys(value).map(k => {
           const v = value[k]
-          return `${k}: ${typeof v === 'string' ? `"${v}"` : v}`
+          return `${k}: ${toJSLiteral(v)}`
         })
         return `${key}={{\n${indent}    ${entries.join(`,\n${indent}    `)}\n${indent}  }}`
       }
 
       if (typeof value === 'string') {
-        // Detect JSON-encoded object strings and treat as objects
-        if (value.startsWith('{') && value.endsWith('}')) {
-          try {
-            const parsed = JSON.parse(value)
-            if (typeof parsed === 'object' && parsed !== null) {
-              const keys = Object.keys(parsed)
-              if (keys.length > 1) {
-                const entries = keys.map(k => `${k}: ${toJSLiteral(parsed[k])}`)
-                return `${key}={{\n${indent}    ${entries.join(`,\n${indent}    `)}\n${indent}  }}`
-              }
-              return `${key}={${toObjectLiteral(parsed)}}`
-            }
-          } catch { /* not JSON, treat as string */ }
-        }
-        return `${key}="${value}"`
+        // JSX string attributes decode entities; a JS literal preserves the original value and type.
+        return `${key}={${toJSLiteral(value)}}`
       } else if (Array.isArray(value)) {
         // Array prop (e.g. gradient stops) — pass as a JS array literal.
         return `${key}={${toJSLiteral(value)}}`
@@ -237,7 +224,7 @@ export function generatePresetCode(preset: PresetConfig, colorSpace?: 'p3-linear
       const isReferenced = isIdReferenced(config.id, preset.components)
 
       if (isReferenced) {
-        idString = `id="${config.id}"`
+        idString = `id={${toJSLiteral(config.id)}}`
       }
     }
 
