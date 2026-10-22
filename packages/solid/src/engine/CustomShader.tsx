@@ -142,7 +142,7 @@ export default function CustomShader<T extends Record<string, any> = Record<stri
             return;
         }
         const current = values();
-        setColorSpaceMode(shaderColorSpace);
+        setColorSpaceMode(shaderColorSpace());
         uniforms = createGpuUniformsMap(definition as any, uniformValues(definition, current), instanceId);
         lastValues = current;
         registerShader(definition);

@@ -12,7 +12,7 @@ export interface ShaderContextValue {
     shaderNodeRegister: (id: string, fragmentNodeFunc: any, parentId: string | null, metadata: any, uniforms: any, componentDefinition?: any, domCanvas?: HTMLCanvasElement) => void;
     shaderUniformUpdate: (nodeId: string, uniformName: string, value: any) => void;
     shaderMetadataUpdate: (nodeId: string, metadata: any) => void;
-    shaderColorSpace: 'p3-linear' | 'srgb';
+    shaderColorSpace: () => 'p3-linear' | 'srgb';
     shaderRendererResetSignal: () => number;
 }
 
@@ -124,14 +124,15 @@ export default function Shader(allProps: ShaderProps) {
     };
 
     // Create a stable context value
-    // Note: shaderRendererResetSignal is passed as the accessor itself (not invoked),
-    // so this memo does not re-track the signal — children observe it in their own effects.
+    // Note: shaderColorSpace and shaderRendererResetSignal are passed as accessors
+    // (not invoked), so this memo does not re-track the signal or props.colorSpace —
+    // children always read the current values when they call the accessors.
     const contextValue = createMemo<ShaderContextValue>(() => ({
         shaderParentId: rootId,
         shaderNodeRegister: nodeRegister,
         shaderUniformUpdate: uniformUpdate,
         shaderMetadataUpdate: metadataUpdate,
-        shaderColorSpace: props.colorSpace || 'p3-linear',
+        shaderColorSpace: () => props.colorSpace || 'p3-linear',
         shaderRendererResetSignal: rendererResetSignal
     }));
 

@@ -157,7 +157,7 @@ export default function ShaderComponent(props: ShaderComponentProps) {
     // Set the global color space mode before creating uniforms so colors are transformed correctly
     const getUniformsMap = () => {
         if (!uniformsMap) {
-            setColorSpaceMode(shaderColorSpace);
+            setColorSpaceMode(shaderColorSpace());
             uniformsMap = createGpuUniformsMap(componentDefinition, effectiveProps(), instanceId);
         }
         return uniformsMap;
@@ -262,6 +262,10 @@ export default function ShaderComponent(props: ShaderComponentProps) {
         // memos, and those must not re-trigger a full re-registration (metadata
         // and uniform updates have their own dedicated effects).
         if (signal === undefined || signal === 0 || !isRegistered) return;
+        // The renderer was re-initialized, possibly with a new colorSpace: drop the
+        // cached uniforms map so it is rebuilt under the current color-space mode
+        // (createGpuUniformsMap precomputes color stops for the active mode).
+        uniformsMap = null;
         registerWithRenderer();
     }));
 

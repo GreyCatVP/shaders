@@ -164,15 +164,18 @@ __MAPPABLE_PROP_DECLS__        blendMode?: BlendMode;
     const shaderColorSpace = getContext<() => 'p3-linear' | 'srgb'>('shaderColorSpace');
 
     /**
-     * Creates the GPU uniform values map using only the changed props
-     * Set the global color space mode before creating uniforms so colors are transformed correctly
-     * Note: Intentionally captures initial value - props are immutable after initialization
+     * (Re)build the GPU uniforms map under the current color-space mode.
+     * A renderer reset (e.g. colorSpace change) re-initializes the renderer with a new
+     * mode; a cached map would keep color stops converted for the old mode.
      */
-    if (shaderColorSpace) {
-        setColorSpaceMode(shaderColorSpace());
+    let uniforms: GpuUniformsMap;
+    function buildUniforms() {
+        if (shaderColorSpace) {
+            setColorSpaceMode(shaderColorSpace());
+        }
+        uniforms = createGpuUniformsMap(componentDefinition, shaderReadyProps, instanceId);
     }
-    // svelte-ignore state_referenced_locally
-    const uniforms: GpuUniformsMap = createGpuUniformsMap(componentDefinition, shaderReadyProps, instanceId);
+    buildUniforms();
 
     /**
      * Get the node registration function from parent context
@@ -345,7 +348,12 @@ __MAPPABLE_PROP_DECLS__        blendMode?: BlendMode;
     $effect(() => {
         const signal = rendererResetSignal?.();
         if (signal === undefined || signal === 0 || !isRegistered) return;
-        untrack(() => registerWithRenderer());
+        untrack(() => {
+            // Rebuild uniforms under the (possibly new) color-space mode before
+            // re-registering; the cached map holds color stops for the old mode.
+            buildUniforms();
+            registerWithRenderer();
+        });
     });
 
     // Clean up node from registry when component is unmounted
